@@ -457,7 +457,7 @@ public class jTPCC implements jTPCCConfig {
                             Formatter infoFmt = new Formatter(infoSB);
                             infoFmt.format("%d,simple,%s,%s,%s,%s,%d,%d,%d,%d,1.0,1.0\n",
                                     runID, JTPCCVERSION, iDB,
-                                    new java.sql.Timestamp(sessionStartTimestamp).toString(),
+                                    new Timestamp(sessionStartTimestamp),
                                     iRunMins,
                                     loadWarehouses,
                                     numWarehouses,
@@ -474,8 +474,7 @@ public class jTPCC implements jTPCCConfig {
                     synchronized (terminals) {
                         printMessage("Starting all terminals...");
                         transactionCount = 1;
-                        for (int i = 0; i < terminals.length; i++)
-                            (new Thread(terminals[i])).start();
+                        for (jTPCCTerminal terminal : terminals) (new Thread(terminal)).start();
 
                     }
 
@@ -607,7 +606,7 @@ public class jTPCC implements jTPCCConfig {
         double tpmC = (6000000 * fastNewOrderCounter / (currTimeMillis - sessionStartTimestamp)) / 100.0;
         double tpmTotal = (6000000 * transactionCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;
 
-        System.out.println("");
+        System.out.println();
         log.info("Term-00, ");
         log.info("Term-00, ");
         log.info("Term-00, Measured tpmC (NewOrders) = " + tpmC);

@@ -18,5 +18,11 @@ drop table if exists bmsql_district CASCADE;
 
 drop table if exists bmsql_warehouse CASCADE;
 
+-- drop table if exists bmsql_nation CASCADE;
+--
+-- drop table if exists bmsql_region CASCADE;
+--
+-- drop table if exists bmsql_supplier CASCADE;
+
 drop sequence if exists bmsql_hist_id_seq CASCADE;
 

@@ -8,8 +8,11 @@
  */
 
 import java.sql.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.io.*;
+import java.util.Date;
 
 public class LoadDataWorker implements Runnable {
     private int worker;
@@ -315,10 +318,13 @@ public class LoadDataWorker implements Runnable {
      * ----
      */
     private void loadWarehouse(int w_id)
-            throws SQLException, IOException {
+            throws SQLException, IOException, ParseException {
         /*
          * Load the WAREHOUSE row.
          */
+        SimpleDateFormat simFormat = new SimpleDateFormat("yyyy-MM-dd 00:00:00");
+        Date currentDate = simFormat.parse("1995-06-17 00:00:00");
+        Date startDate = simFormat.parse("1992-01-01 00:00:00");
         if (writeCSV) {
             fmtWarehouse.format("%d,%.2f,%.4f,%s,%s,%s,%s,%s,%s\n",
                     w_id,
@@ -505,7 +511,10 @@ public class LoadDataWorker implements Runnable {
                     stmtCustomer.setString(10, rnd.getState());
                     stmtCustomer.setString(11, rnd.getNString(4, 4) + "11111");
                     stmtCustomer.setString(12, rnd.getNString(16, 16));
-                    stmtCustomer.setTimestamp(13, new java.sql.Timestamp(System.currentTimeMillis()));
+                    // origin date
+//                    stmtCustomer.setTimestamp(13, new java.sql.Timestamp(System.currentTimeMillis()));
+                    // current date
+                    stmtCustomer.setTimestamp(13, Timestamp.valueOf(simFormat.format(currentDate)));
                     if (rnd.nextInt(1, 100) <= 90)
                         stmtCustomer.setString(14, "GC");
                     else
@@ -542,7 +551,10 @@ public class LoadDataWorker implements Runnable {
                     stmtHistory.setInt(4, w_id);
                     stmtHistory.setInt(5, d_id);
                     stmtHistory.setInt(6, w_id);
-                    stmtHistory.setTimestamp(7, new java.sql.Timestamp(System.currentTimeMillis()));
+                    // origin date
+//                    stmtHistory.setTimestamp(7, new java.sql.Timestamp(System.currentTimeMillis()));
+                    // current date
+                    stmtHistory.setTimestamp(7, Timestamp.valueOf(simFormat.format(currentDate)));
                     stmtHistory.setDouble(8, 10.00);
                     stmtHistory.setString(9, rnd.getAString_12_24());
 
@@ -579,7 +591,7 @@ public class LoadDataWorker implements Runnable {
 
             for (int o_id = 1; o_id <= 3000; o_id++) {
                 int o_ol_cnt = rnd.nextInt(5, 15);
-
+                long o_entry_d = (long) (startDate.getTime() + 1000 * 60 * 60 * 24 * rnd.nextDouble(0, 2405));
                 if (writeCSV) {
                     fmtOrder.format("%d,%d,%d,%d,%s,%d,%d,%s\n",
                             o_id,
@@ -595,7 +607,10 @@ public class LoadDataWorker implements Runnable {
                     stmtOrder.setInt(2, d_id);
                     stmtOrder.setInt(3, w_id);
                     stmtOrder.setInt(4, randomCID[o_id - 1]);
-                    stmtOrder.setTimestamp(5, new java.sql.Timestamp(System.currentTimeMillis()));
+                    // origin date
+//                    stmtOrder.setTimestamp(5, new java.sql.Timestamp(System.currentTimeMillis()));
+                    // current date
+                    stmtOrder.setTimestamp(5, new java.sql.Timestamp(o_entry_d));
                     if (o_id < 2101)
                         stmtOrder.setInt(6, rnd.nextInt(1, 10));
                     else
@@ -631,8 +646,14 @@ public class LoadDataWorker implements Runnable {
                         stmtOrderLine.setInt(4, ol_number);
                         stmtOrderLine.setInt(5, rnd.nextInt(1, 100000));
                         stmtOrderLine.setInt(6, w_id);
+                        long shipDate = (long) (o_entry_d + 1000 * 60 * 60 * 24 * rnd.nextDouble(1, 121));
+                        long commitDate = (long) (o_entry_d + 1000 * 60 * 60 * 24 * rnd.nextDouble(30, 90));
+                        long receiptDate = (long) (shipDate + 1000 * 60 * 60 * 24 * rnd.nextDouble(1, 30));
                         if (o_id < 2101)
-                            stmtOrderLine.setTimestamp(7, new java.sql.Timestamp(now));
+                            // origin date
+//                            stmtOrderLine.setTimestamp(7, new java.sql.Timestamp(now));
+                            // current date
+                            stmtOrderLine.setTimestamp(7, Timestamp.valueOf(simFormat.format(shipDate)));
                         else
                             stmtOrderLine.setNull(7, java.sql.Types.TIMESTAMP);
                         stmtOrderLine.setInt(8, 5);
