@@ -44,10 +44,12 @@ public class jTPCC implements jTPCCConfig {
     private double tpmC;
     private jTPCCRandom rnd;
     private OSCollector osCollector = null;
+    public static long gloabalSysCurrentTime;
 
     public jTPCC() {
 
         // load the ini file
+
         Properties ini = new Properties();
         try {
             ini.load(new FileInputStream(System.getProperty("prop")));
@@ -493,6 +495,7 @@ public class jTPCC implements jTPCCConfig {
     }
 
     public static void main(String[] args) {
+        gloabalSysCurrentTime = System.currentTimeMillis();
         PropertyConfigurator.configure("log4j.properties");
         new jTPCC();
     }

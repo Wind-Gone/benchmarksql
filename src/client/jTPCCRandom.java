@@ -13,6 +13,7 @@ import java.io.*;
 import java.sql.*;
 import java.util.*;
 import java.text.*;
+import java.util.Date;
 
 public class jTPCCRandom {
     private static final char[] aStringChars = {
@@ -32,21 +33,21 @@ public class jTPCCRandom {
 
     private Random random;
 
-    private String string_A_6[];
-    private String string_A_8[];
-    private String string_A_10[];
-    private String string_A_12[];
-    private String string_A_14[];
-    private String string_A_24[];
-    private String string_A_26[];
-    private String string_A_300[];
+    private String[] string_A_6;
+    private String[] string_A_8;
+    private String[] string_A_10;
+    private String[] string_A_12;
+    private String[] string_A_14;
+    private String[] string_A_24;
+    private String[] string_A_26;
+    private String[] string_A_300;
 
-    private String string_B_4[];
-    private String string_B_8[];
-    private String string_B_10[];
-    private String string_B_12[];
-    private String string_B_24[];
-    private String string_B_200[];
+    private String[] string_B_4;
+    private String[] string_B_8;
+    private String[] string_B_10;
+    private String[] string_B_12;
+    private String[] string_B_24;
+    private String[] string_B_200;
 
     /*
      * jTPCCRandom()
@@ -210,24 +211,24 @@ public class jTPCCRandom {
      *     instead of cartoon style curse-bubbles.
      */
     public String getAString(long x, long y) {
-        String result = new String();
+        StringBuilder result = new StringBuilder();
         long len = nextLong(x, y);
         long have = 1;
 
         if (y <= 0)
-            return result;
+            return result.toString();
 
-        result += aStringChars[(int) nextLong(0, 51)];
+        result.append(aStringChars[(int) nextLong(0, 51)]);
         while (have < len) {
-            result += aStringChars[(int) nextLong(0, 61)];
+            result.append(aStringChars[(int) nextLong(0, 61)]);
             have++;
         }
 
-        return result;
+        return result.toString();
     }
 
     public String getAString_6_10() {
-        String result = new String();
+        String result = "";
 
         result += string_A_6[nextInt(0, 99)];
         result += string_B_4[nextInt(0, 49)];
@@ -236,7 +237,7 @@ public class jTPCCRandom {
     }
 
     public String getAString_8_16() {
-        String result = new String();
+        String result = "";
 
         result += string_A_8[nextInt(0, 99)];
         result += string_B_8[nextInt(0, 89)];
@@ -245,7 +246,7 @@ public class jTPCCRandom {
     }
 
     public String getAString_10_20() {
-        String result = new String();
+        String result = "";
 
         result += string_A_10[nextInt(0, 99)];
         result += string_B_10[nextInt(0, 109)];
@@ -254,7 +255,7 @@ public class jTPCCRandom {
     }
 
     public String getAString_12_24() {
-        String result = new String();
+        String result = "";
 
         result += string_A_12[nextInt(0, 99)];
         result += string_B_12[nextInt(0, 129)];
@@ -263,7 +264,7 @@ public class jTPCCRandom {
     }
 
     public String getAString_14_24() {
-        String result = new String();
+        String result = "";
 
         result += string_A_14[nextInt(0, 99)];
         result += string_B_10[nextInt(0, 109)];
@@ -272,7 +273,7 @@ public class jTPCCRandom {
     }
 
     public String getAString_24() {
-        String result = new String();
+        String result = "";
 
         result += string_A_24[nextInt(0, 99)];
 
@@ -280,7 +281,7 @@ public class jTPCCRandom {
     }
 
     public String getAString_26_50() {
-        String result = new String();
+        String result = "";
 
         result += string_A_26[nextInt(0, 99)];
         result += string_B_24[nextInt(0, 249)];
@@ -289,7 +290,7 @@ public class jTPCCRandom {
     }
 
     public String getAString_300_500() {
-        String result = new String();
+        String result = "";
 
         result += string_A_300[nextInt(0, 99)];
         result += string_B_200[nextInt(0, 2009)];
@@ -303,16 +304,16 @@ public class jTPCCRandom {
      *     Produce a random numeric string of length [x .. y].
      */
     public String getNString(long x, long y) {
-        String result = new String();
+        StringBuilder result = new StringBuilder();
         long len = nextLong(x, y);
         long have = 0;
 
         while (have < len) {
-            result += (char) (nextLong((long) '0', (long) '9'));
+            result.append((char) (nextLong('0', '9')));
             have++;
         }
 
-        return result;
+        return result.toString();
     }
 
     /*
@@ -341,14 +342,12 @@ public class jTPCCRandom {
      *     Produce the syllable representation for C_LAST of [0 .. 999]
      */
     public String getCLast(int num) {
-        String result = new String();
-
+        StringBuilder result = new StringBuilder();
         for (int i = 0; i < 3; i++) {
-            result = cLastTokens[num % 10] + result;
+            result.insert(0, cLastTokens[num % 10]);
             num /= 10;
         }
-
-        return result;
+        return result.toString();
     }
 
     /*
@@ -363,13 +362,14 @@ public class jTPCCRandom {
     }
 
     public String getState() {
-        String result = new String();
+        String result = "";
 
-        result += (char) nextInt((int) 'A', (int) 'Z');
-        result += (char) nextInt((int) 'A', (int) 'Z');
+        result += (char) nextInt('A', 'Z');
+        result += (char) nextInt('A', 'Z');
 
         return result;
     }
+
 
     /*
      * Methods to retrieve the C values used.
@@ -384,5 +384,26 @@ public class jTPCCRandom {
 
     public long getNURandCI_ID() {
         return nURandCI_ID;
+    }
+
+    public int differentDaysByMillisecond(Date date1, Date date2) {//计算两个日期相差天数
+        return Math.abs((int) ((date2.getTime() - date1.getTime()) / (1000 * 3600 * 24)));
+    }
+
+    public Date getDateAfter(Date d, int day) {
+        Calendar now = Calendar.getInstance();
+        now.setTime(d);
+        now.add(Calendar.DATE, day);
+        return now.getTime();
+    }
+
+    public Date getRandomDateBetween(Date d1, Date d2) {
+        int diffDays = differentDaysByMillisecond(d1, d2);
+        return getDateAfter(d1, diffDays);
+    }
+
+    public long getRandomTimestampBetween(Date d1, Date d2) {
+        long range = d2.getTime() - d1.getTime();
+        return d1.getTime() + (long) (random.nextDouble() * range);
     }
 } // end jTPCCRandom

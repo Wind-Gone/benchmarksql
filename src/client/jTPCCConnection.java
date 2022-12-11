@@ -271,7 +271,7 @@ public class jTPCCConnection {
                 "DELETE FROM bmsql_new_order " +
                         "    WHERE no_w_id = ? AND no_d_id = ? AND no_o_id = ?");
         stmtDeliveryBGSelectOrder = dbConn.prepareStatement(
-                "SELECT o_c_id " +
+                "SELECT o_c_id, o_entry_d " +
                         "    FROM bmsql_oorder " +
                         "    WHERE o_w_id = ? AND o_d_id = ? AND o_id = ?");
         stmtDeliveryBGUpdateOrder = dbConn.prepareStatement(

@@ -8,9 +8,12 @@
 
 import org.apache.log4j.*;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.sql.*;
 import java.math.*;
+import java.util.Date;
 
 public class jTPCCTData {
     public final static int
@@ -50,6 +53,7 @@ public class jTPCCTData {
     private Formatter resultFmt = new Formatter(resultSB);
     private boolean useStoredProcedures = false;
     private int dbType = jTPCCConfig.DB_UNKNOWN;
+    private SimpleDateFormat simFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 
     public void setNumWarehouses(int num) {
         numWarehouses = num;
@@ -87,7 +91,7 @@ public class jTPCCTData {
         dbType = type;
     }
 
-    public void execute(Logger log, jTPCCConnection db)
+    public void execute(Logger log, jTPCCConnection db, jTPCCRandom rnd)
             throws Exception {
         transStart = System.currentTimeMillis();
         if (transDue == 0)
@@ -155,7 +159,7 @@ public class jTPCCTData {
                         default -> throw new Exception("Stored Procedure for DELIVERY_BG not implemented");
                     }
                 } else {
-                    executeDeliveryBG(log, db);
+                    executeDeliveryBG(log, db, rnd);
                 }
 
                 break;
@@ -325,7 +329,12 @@ public class jTPCCTData {
 
         // The o_entry_d is now.
         o_entry_d = System.currentTimeMillis();
-        newOrder.o_entry_d = new java.sql.Timestamp(o_entry_d).toString();
+        // origin date
+//        newOrder.o_entry_d = new java.sql.Timestamp(o_entry_d);
+
+        // current date
+        Date currentDate = simFormat.parse("1998-08-02 00:00:00");
+        newOrder.o_entry_d = new java.sql.Timestamp(currentDate.getTime() + System.currentTimeMillis() - jTPCC.gloabalSysCurrentTime);
 
         /*
          * When processing the order lines we must select the STOCK rows
@@ -412,7 +421,10 @@ public class jTPCCTData {
             stmt.setInt(2, newOrder.d_id);
             stmt.setInt(3, newOrder.w_id);
             stmt.setInt(4, newOrder.c_id);
-            stmt.setTimestamp(5, new java.sql.Timestamp(System.currentTimeMillis()));
+            // origin date
+//            stmt.setTimestamp(5, new java.sql.Timestamp(System.currentTimeMillis()));
+            // current date
+            stmt.setTimestamp(5, new java.sql.Timestamp((newOrder.o_entry_d).getTime()));
             stmt.setInt(6, ol_cnt);
             stmt.setInt(7, o_all_local);
             stmt.executeUpdate();
@@ -617,7 +629,7 @@ public class jTPCCTData {
             newOrder.w_tax = rs.getDouble("out_w_tax");
             newOrder.d_tax = rs.getDouble("out_d_tax");
             newOrder.o_id = rs.getInt("out_o_id");
-            newOrder.o_entry_d = rs.getTimestamp("out_o_entry_d").toString();
+            newOrder.o_entry_d = rs.getTimestamp("out_o_entry_d");
             newOrder.o_ol_cnt = rs.getInt("out_ol_cnt");
             newOrder.total_amount = rs.getDouble("out_total_amount");
             newOrder.c_last = rs.getString("out_c_last");
@@ -724,7 +736,7 @@ public class jTPCCTData {
             newOrder.w_tax = stmt.getDouble(12);
             newOrder.d_tax = stmt.getDouble(13);
             newOrder.o_id = stmt.getInt(14);
-            newOrder.o_entry_d = stmt.getTimestamp(15).toString();
+            newOrder.o_entry_d = stmt.getTimestamp(15);
             newOrder.o_ol_cnt = stmt.getInt(16);
             newOrder.total_amount = stmt.getDouble(17);
             newOrder.c_last = stmt.getString(18);
@@ -1416,7 +1428,7 @@ public class jTPCCTData {
                         " C_ID=" + orderStatus.c_id + " not found");
             }
             orderStatus.o_id = rs.getInt("o_id");
-            orderStatus.o_entry_d = rs.getTimestamp("o_entry_d").toString();
+            orderStatus.o_entry_d = rs.getTimestamp("o_entry_d");
             orderStatus.o_carrier_id = rs.getInt("o_carrier_id");
             if (rs.wasNull())
                 orderStatus.o_carrier_id = -1;
@@ -1498,7 +1510,7 @@ public class jTPCCTData {
             orderStatus.c_middle = rs.getString("out_c_middle");
             orderStatus.c_balance = rs.getDouble("out_c_balance");
             orderStatus.o_id = rs.getInt("out_o_id");
-            orderStatus.o_entry_d = rs.getTimestamp("out_o_entry_d").toString();
+            orderStatus.o_entry_d = rs.getTimestamp("out_o_entry_d");
             orderStatus.o_carrier_id = rs.getInt("out_o_carrier_id");
             orderStatus.c_id = rs.getInt("in_c_id");
             Array arr_ol_supply_w_id = rs.getArray("out_ol_supply_w_id");
@@ -1584,7 +1596,7 @@ public class jTPCCTData {
             orderStatus.c_middle = stmt.getString(6);
             orderStatus.c_balance = stmt.getDouble(7);
             orderStatus.o_id = stmt.getInt(8);
-            orderStatus.o_entry_d = stmt.getTimestamp(9).toString();
+            orderStatus.o_entry_d = stmt.getTimestamp(9);
             orderStatus.o_carrier_id = stmt.getInt(10);
 
             int[] supply_w_id_arr = (int[]) (stmt.getArray(11).getArray());
@@ -1878,9 +1890,12 @@ public class jTPCCTData {
         delivery.deliveryBG = null;
     }
 
-    private void executeDelivery(Logger log, jTPCCConnection db) {
+    private void executeDelivery(Logger log, jTPCCConnection db) throws ParseException {
+        // origin date
         long now = System.currentTimeMillis();
-
+        // current date
+        Date currentDate = simFormat.parse("1998-08-02 00:00:00");
+        long newCurrentDate = currentDate.getTime() + now - jTPCC.gloabalSysCurrentTime;
         /*
          * The DELIVERY transaction is different from all the others.
          * The foreground transaction, experienced by the user, does
@@ -1890,8 +1905,8 @@ public class jTPCCTData {
          * part for the caller to pick up and queue/execute.
          */
         delivery.deliveryBG = new jTPCCTData();
-        delivery.deliveryBG.generateDeliveryBG(delivery.w_id, now,
-                new java.sql.Timestamp(now).toString(), this);
+        delivery.deliveryBG.generateDeliveryBG(delivery.w_id, newCurrentDate,
+                new java.sql.Timestamp(newCurrentDate), this);
         delivery.deliveryBG.setDBType(dbType);
         delivery.deliveryBG.setUseStoredProcedures(useStoredProcedures);
         delivery.execution_status = "Delivery has been queued";
@@ -1926,7 +1941,7 @@ public class jTPCCTData {
      * ***** DELIVERY_BG related methods and subclass. **********************
      * **********************************************************************
      * *********************************************************************/
-    private void generateDeliveryBG(int w_id, long due, String ol_delivery_d,
+    private void generateDeliveryBG(int w_id, long due, Timestamp ol_delivery_d,
                                     jTPCCTData parent) {
         /*
          * The DELIVERY_BG part is created as a result of executing the
@@ -1960,7 +1975,7 @@ public class jTPCCTData {
             deliveryBG.delivered_o_id[i] = -1;
     }
 
-    private void executeDeliveryBG(Logger log, jTPCCConnection db)
+    private void executeDeliveryBG(Logger log, jTPCCConnection db, jTPCCRandom rnd)
             throws Exception {
         PreparedStatement stmt1;
         PreparedStatement stmt2;
@@ -1994,7 +2009,7 @@ public class jTPCCTData {
                     }
                     o_id = rs.getInt("no_o_id");
                     rs.close();
-
+//                    devOrderIdPerW[deliveryBG.w_id * 10 + d_id].incrementAndGet();
                     stmt2.setInt(1, deliveryBG.w_id);
                     stmt2.setInt(2, d_id);
                     stmt2.setInt(3, o_id);
@@ -2048,11 +2063,15 @@ public class jTPCCTData {
                             " O_ID=" + o_id + " not found");
                 }
                 c_id = rs.getInt("o_c_id");
+                Date o_entry_d = rs.getTimestamp("o_entry_d");
                 rs.close();
 
                 // Update ORDER_LINE setting the ol_delivery_d.
                 stmt1 = db.stmtDeliveryBGUpdateOrderLine;
+                // orgin date
                 stmt1.setTimestamp(1, new java.sql.Timestamp(now));
+                // current date
+                stmt1.setTimestamp(1, new java.sql.Timestamp(o_entry_d.getTime() + 86400000L * rnd.nextInt(1, 121)));
                 stmt1.setInt(2, deliveryBG.w_id);
                 stmt1.setInt(3, d_id);
                 stmt1.setInt(4, o_id);
@@ -2121,7 +2140,7 @@ public class jTPCCTData {
             stmt = db.stmtDeliveryBGStoredProc;
             stmt.setInt(1, deliveryBG.w_id);
             stmt.setInt(2, deliveryBG.o_carrier_id);
-            stmt.setTimestamp(3, Timestamp.valueOf(deliveryBG.ol_delivery_d));
+            stmt.setTimestamp(3, Timestamp.valueOf(deliveryBG.ol_delivery_d.toLocalDateTime()));
             rs = stmt.executeQuery();
 
             // The stored proc succeeded. Extract the results.
@@ -2170,7 +2189,7 @@ public class jTPCCTData {
             stmt = conn.prepareCall(db.stmtDeliveryBGStoredProcOracle);
             stmt.setInt(1, deliveryBG.w_id);
             stmt.setInt(2, deliveryBG.o_carrier_id);
-            stmt.setTimestamp(3, Timestamp.valueOf(deliveryBG.ol_delivery_d));
+            stmt.setTimestamp(3, deliveryBG.ol_delivery_d);
             stmt.registerOutParameter(4, JDBCType.ARRAY, "INT_ARRAY");
 
             stmt.executeUpdate();
@@ -2253,7 +2272,7 @@ public class jTPCCTData {
         public double d_tax;
         public int o_ol_cnt;
         public int o_id;
-        public String o_entry_d;
+        public Timestamp o_entry_d;
         public double total_amount;
         public String execution_status;
 
@@ -2276,7 +2295,7 @@ public class jTPCCTData {
         public String c_middle;
         public double c_balance;
         public int o_id;
-        public String o_entry_d;
+        public Timestamp o_entry_d;
         public int o_carrier_id;
 
         public int[] ol_supply_w_id = new int[15];
@@ -2315,12 +2334,12 @@ public class jTPCCTData {
         /* DELIVERY_BG data */
         public int w_id;
         public int o_carrier_id;
-        public String ol_delivery_d;
+        public Timestamp ol_delivery_d;
 
         public int[] delivered_o_id;
     }
 
-    private class PaymentData {
+    private static class PaymentData {
         /* terminal input data */
         public int w_id;
         public int d_id;

@@ -157,7 +157,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable {
                 try {
                     term.generatePayment(log, rnd, 0);
                     term.traceScreen(log);
-                    term.execute(log, db);
+                    term.execute(log, db, rnd);
                     parent.resultAppend(term);
                     term.traceScreen(log);
                 } catch (Exception e) {
@@ -176,7 +176,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable {
                 try {
                     term.generateStockLevel(log, rnd, 0);
                     term.traceScreen(log);
-                    term.execute(log, db);
+                    term.execute(log, db, rnd);
                     parent.resultAppend(term);
                     term.traceScreen(log);
                 } catch (Exception e) {
@@ -195,7 +195,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable {
                 try {
                     term.generateOrderStatus(log, rnd, 0);
                     term.traceScreen(log);
-                    term.execute(log, db);
+                    term.execute(log, db, rnd);
                     parent.resultAppend(term);
                     term.traceScreen(log);
                 } catch (Exception e) {
@@ -214,7 +214,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable {
                 try {
                     term.generateDelivery(log, rnd, 0);
                     term.traceScreen(log);
-                    term.execute(log, db);
+                    term.execute(log, db, rnd);
                     parent.resultAppend(term);
                     term.traceScreen(log);
 
@@ -225,7 +225,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable {
                      */
                     jTPCCTData bg = term.getDeliveryBG();
                     bg.traceScreen(log);
-                    bg.execute(log, db);
+                    bg.execute(log, db, rnd);
                     parent.resultAppend(bg);
                     bg.traceScreen(log);
 
@@ -246,7 +246,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable {
                 try {
                     term.generateNewOrder(log, rnd, 0);
                     term.traceScreen(log);
-                    term.execute(log, db);
+                    term.execute(log, db, rnd);
                     parent.resultAppend(term);
                     term.traceScreen(log);
                 } catch (Exception e) {
