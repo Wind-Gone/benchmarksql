@@ -12,6 +12,7 @@ import org.apache.log4j.*;
 import java.io.*;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.text.*;
 
@@ -49,7 +50,11 @@ public class jTPCC implements jTPCCConfig {
     public jTPCC() {
 
         // load the ini file
-
+        //init devOrderIdPerW and recOrderIdPerW
+        for (int i = 0; i < 1000000; i++) {
+            jTPCCTData.devOrderIdPerW[i] = new AtomicInteger(0);
+            jTPCCTData.recOrderIdPerW[i] = new AtomicInteger(0);
+        }
         Properties ini = new Properties();
         try {
             ini.load(new FileInputStream(System.getProperty("prop")));
@@ -92,10 +97,11 @@ public class jTPCC implements jTPCCConfig {
         log.info("Term-00, ");
 
         String iNewOrderWeight = getProp(ini, "newOrderWeight", "43.47826");
-        String iPaymentWeight = getProp(ini, "paymentWeight", "43.47826");
+        String iPaymentWeight = getProp(ini, "paymentWeight", "41.47826");
         String iOrderStatusWeight = getProp(ini, "orderStatusWeight", "4.347827");
         String iDeliveryWeight = getProp(ini, "deliveryWeight", "4.347826");
         String iStockLevelWeight = getProp(ini, "stockLevelWeight", "4.347827");
+        String iReceiveGoodsWeight = getProp(ini, "receiveGoodsWeight", "4.347826");
 
         log.info("Term-00, ");
         String resultDirectory = getProp(ini, "resultDirectory");
@@ -235,10 +241,11 @@ public class jTPCC implements jTPCCConfig {
                 int numWarehouses = -1;
                 int loadWarehouses = -1;
                 double newOrderWeightValue = 43.47826;
-                double paymentWeightValue = 43.47826;
+                double paymentWeightValue = 41.47826;
                 double orderStatusWeightValue = 4.347827;
                 double deliveryWeightValue = 4.347826;
                 double stockLevelWeightValue = 4.347827;
+                double receiveGoodsWeightValue = 4.347827;
                 long executionTimeMillis = -1;
                 boolean terminalWarehouseFixed = true;
                 boolean useStoredProcedures = false;
@@ -349,17 +356,20 @@ public class jTPCC implements jTPCCConfig {
                     orderStatusWeightValue = Double.parseDouble(iOrderStatusWeight);
                     deliveryWeightValue = Double.parseDouble(iDeliveryWeight);
                     stockLevelWeightValue = Double.parseDouble(iStockLevelWeight);
+                    receiveGoodsWeightValue = Integer.parseInt(iReceiveGoodsWeight);
 
-                    if (newOrderWeightValue < 0 || paymentWeightValue < 0 || orderStatusWeightValue < 0 || deliveryWeightValue < 0 || stockLevelWeightValue < 0)
+                    if (newOrderWeightValue < 0 || paymentWeightValue < 0 || orderStatusWeightValue < 0
+                            || deliveryWeightValue < 0 || stockLevelWeightValue < 0 || receiveGoodsWeightValue < 0)
                         throw new NumberFormatException();
-                    else if (newOrderWeightValue == 0 && paymentWeightValue == 0 && orderStatusWeightValue == 0 && deliveryWeightValue == 0 && stockLevelWeightValue == 0)
+                    else if (newOrderWeightValue == 0 && paymentWeightValue == 0 && orderStatusWeightValue == 0
+                            && deliveryWeightValue == 0 && stockLevelWeightValue == 0 && receiveGoodsWeightValue == 0)
                         throw new NumberFormatException();
                 } catch (NumberFormatException e1) {
                     errorMessage("Invalid number in mix percentage!");
                     throw new Exception();
                 }
 
-                double sumWeight = newOrderWeightValue + paymentWeightValue + orderStatusWeightValue + deliveryWeightValue + stockLevelWeightValue;
+                double sumWeight = newOrderWeightValue + paymentWeightValue + orderStatusWeightValue + deliveryWeightValue + stockLevelWeightValue + receiveGoodsWeightValue;
                 sumWeight = Math.round(sumWeight * 100.0) / 100.0;
                 if (sumWeight != 100.0) {
                     errorMessage("Sum of mix percentage parameters must equal 100%! Have %f" + sumWeight);
@@ -388,10 +398,6 @@ public class jTPCC implements jTPCCConfig {
                 terminalNames = new String[numTerminals];
                 terminalsStarted = numTerminals;
                 try {
-                    String database = iConn;
-                    String username = iUser;
-                    String password = iPassword;
-
                     int[][] usedTerminals = new int[numWarehouses][10];
                     for (int i = 0; i < numWarehouses; i++)
                         for (int j = 0; j < 10; j++)
@@ -410,7 +416,7 @@ public class jTPCC implements jTPCCConfig {
                         String terminalName = "Term-" + (i >= 9 ? "" + (i + 1) : "0" + (i + 1));
                         Connection conn;
                         printMessage("Creating database connection for " + terminalName + "...");
-                        conn = DriverManager.getConnection(database, dbProps);
+                        conn = DriverManager.getConnection(iConn, dbProps);
                         conn.setAutoCommit(false);
 
                         jTPCCTerminal terminal = new jTPCCTerminal
@@ -441,7 +447,6 @@ public class jTPCC implements jTPCCConfig {
 
                     printMessage("Created " + numTerminals + " terminal(s) successfully!");
                     boolean dummvar = true;
-
 
                     // Create Terminals, Start Transactions
                     sessionStart = getCurrentTime();
@@ -477,13 +482,11 @@ public class jTPCC implements jTPCCConfig {
                         for (jTPCCTerminal terminal : terminals) (new Thread(terminal)).start();
 
                     }
-
                     printMessage("All terminals started executing " + sessionStart);
                 } catch (Exception e1) {
                     errorMessage("This session ended with errors!");
                     printStreamReport.close();
                     fileOutputStream.close();
-
                     throw new Exception();
                 }
 
@@ -603,8 +606,8 @@ public class jTPCC implements jTPCCConfig {
         long currTimeMillis = System.currentTimeMillis();
         long freeMem = Runtime.getRuntime().freeMemory() / (1024 * 1024);
         long totalMem = Runtime.getRuntime().totalMemory() / (1024 * 1024);
-        double tpmC = (6000000 * fastNewOrderCounter / (currTimeMillis - sessionStartTimestamp)) / 100.0;
-        double tpmTotal = (6000000 * transactionCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;
+        double tpmC = (6000000 * fastNewOrderCounter / (currTimeMillis - sessionStartTimestamp + 0.00001)) / 100.0;
+        double tpmTotal = (6000000 * transactionCount / (currTimeMillis - sessionStartTimestamp + 0.00001)) / 100.0;
 
         System.out.println();
         log.info("Term-00, ");
@@ -633,19 +636,14 @@ public class jTPCC implements jTPCCConfig {
         return dateFormat.format(new java.util.Date());
     }
 
-    private String getFileNameSuffix() {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
-        return dateFormat.format(new java.util.Date());
-    }
-
     synchronized private void updateStatusLine() {
         long currTimeMillis = System.currentTimeMillis();
 
         if (currTimeMillis > sessionNextTimestamp) {
-            StringBuilder informativeText = new StringBuilder("");
+            StringBuilder informativeText = new StringBuilder();
             Formatter fmt = new Formatter(informativeText);
-            double tpmC = (6000000 * fastNewOrderCounter / (currTimeMillis - sessionStartTimestamp)) / 100.0;
-            double tpmTotal = (6000000 * transactionCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;
+            double tpmC = (6000000 * fastNewOrderCounter / (currTimeMillis - sessionStartTimestamp + 0.00001)) / 100.0;
+            double tpmTotal = (6000000 * transactionCount / (currTimeMillis - sessionStartTimestamp + 0.00001)) / 100.0;
 
             sessionNextTimestamp += 1000;  /* update this every seconds */
 

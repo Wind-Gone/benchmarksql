@@ -14,6 +14,7 @@ import java.util.*;
 import java.sql.*;
 import java.math.*;
 import java.util.Date;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class jTPCCTData {
     public final static int
@@ -23,12 +24,15 @@ public class jTPCCTData {
             TT_STOCK_LEVEL = 3,
             TT_DELIVERY = 4,
             TT_DELIVERY_BG = 5,
-            TT_NONE = 6,
-            TT_DONE = 7;
+            TT_RECEIVE = 6,
+            TT_NONE = 7,
+            TT_DONE = 8,
+            NATIONS_MAX = 90,
+            NATIONS_COUNT = 25;
     public final static String[] transTypeNames = {
             "NEW_ORDER", "PAYMENT", "ORDER_STATUS", "STOCK_LEVEL",
-            "DELIVERY", "DELIVERY_BG", "NONE", "DONE"};
-    private static Object traceLock = new Object();
+            "DELIVERY", "DELIVERY_BG", "RECEIVE", "NONE", "DONE"};
+    private static final Object traceLock = new Object();
     public int sched_code;
     public long sched_fuzz;
     public jTPCCTData term_left;
@@ -49,11 +53,14 @@ public class jTPCCTData {
     private StockLevelData stockLevel = null;
     private DeliveryData delivery = null;
     private DeliveryBGData deliveryBG = null;
-    private StringBuffer resultSB = new StringBuffer();
-    private Formatter resultFmt = new Formatter(resultSB);
+    public static AtomicInteger[] devOrderIdPerW = new AtomicInteger[1000000];
+    public static AtomicInteger[] recOrderIdPerW = new AtomicInteger[1000000];
+    private final StringBuffer resultSB = new StringBuffer();
     private boolean useStoredProcedures = false;
     private int dbType = jTPCCConfig.DB_UNKNOWN;
-    private SimpleDateFormat simFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+    private final Formatter resultFmt = new Formatter(resultSB);
+    private final SimpleDateFormat simFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+    private ReceiveGoodsData receiveGoods = null;
 
     public void setNumWarehouses(int num) {
         numWarehouses = num;
@@ -106,7 +113,7 @@ public class jTPCCTData {
                         default -> throw new Exception("Stored Procedure for NEW_ORDER not implemented");
                     }
                 } else {
-                    executeNewOrder(log, db);
+                    executeNewOrder(log, db, rnd);
                 }
                 break;
 
@@ -118,7 +125,7 @@ public class jTPCCTData {
                         default -> throw new Exception("Stored Procedure for PAYMENT not implemented");
                     }
                 } else {
-                    executePayment(log, db);
+                    executePayment(log, db, rnd);
                 }
                 break;
 
@@ -148,7 +155,7 @@ public class jTPCCTData {
                 break;
 
             case TT_DELIVERY:
-                executeDelivery(log, db);
+                executeDelivery(log, db, rnd);
                 break;
 
             case TT_DELIVERY_BG:
@@ -163,13 +170,107 @@ public class jTPCCTData {
                 }
 
                 break;
-
+            case TT_RECEIVE:
+                executeReceiveGoods(log, db, rnd);
+                break;
             default:
                 throw new Exception("Unknown transType " + transType);
         }
 
         transEnd = System.currentTimeMillis();
     }
+
+    public void generateReceiveGoods(Logger log, jTPCCRandom rnd, long due) {
+        transType = TT_RECEIVE;
+        transDue = due;
+        transStart = 0;
+        transEnd = 0;
+        transRbk = false;
+        transError = null;
+
+        newOrder = null;
+        payment = null;
+        orderStatus = null;
+        stockLevel = null;
+        delivery = null;
+        deliveryBG = null;
+        receiveGoods = new ReceiveGoodsData();
+        receiveGoods.w_id = terminalWarehouse;
+    }
+
+    private void executeReceiveGoods(Logger log, jTPCCConnection db, jTPCCRandom rnd) throws Exception {
+        PreparedStatement stmt1, stmt2;
+        ResultSet rs;
+        for (int i = 1; i <= 10; i++) {
+            receiveGoods.d_id = i;
+            int currentRec;     //get receiveID
+            do {
+                currentRec = recOrderIdPerW[receiveGoods.w_id * 10 + receiveGoods.d_id].get();
+                if (devOrderIdPerW[receiveGoods.w_id * 10 + receiveGoods.d_id].get() == currentRec) {
+                    try {
+                        db.rollback();
+                    } catch (SQLException se2) {
+                        throw new Exception("Unexpected SQLException on rollback: " +
+                                se2.getMessage());
+                    }
+                }
+            } while (!recOrderIdPerW[receiveGoods.w_id * 10 + receiveGoods.d_id].compareAndSet(currentRec, currentRec + 1));
+            stmt1 = db.stmtReveiveSelectOldeliveryd;
+            try {
+                stmt1.setInt(1, receiveGoods.w_id);
+                stmt1.setInt(2, receiveGoods.d_id);
+                stmt1.setInt(3, currentRec);
+                rs = stmt1.executeQuery();
+                while (rs.next()) {
+                    receiveGoods.ol_delivery_d = rs.getTimestamp("ol_delivery_d");
+                    receiveGoods.ol_receipdate = receiveGoods.ol_delivery_d.getTime() + 86400000 * ((long) rnd.nextDouble(1, 121));
+                    Date current_d = simFormat.parse("1998-08-02 00:00:00");
+                    long new_current_d = current_d.getTime() + System.currentTimeMillis() - jTPCC.gloabalSysCurrentTime;
+                    if (new_current_d > receiveGoods.ol_receipdate) {
+                        if (rnd.nextInt(1, 100) > 50)
+                            receiveGoods.ol_returnflag = "R";
+                        else
+                            receiveGoods.ol_returnflag = "A";
+                    } else {
+                        receiveGoods.ol_returnflag = "N";
+                    }
+
+                    stmt2 = db.stmtReveiveUpdateReceipdate;
+                    try {
+                        stmt2.setTimestamp(1, new java.sql.Timestamp(receiveGoods.ol_receipdate));
+                        stmt2.setString(2, receiveGoods.ol_returnflag);
+                        stmt2.setInt(3, receiveGoods.w_id);
+                        stmt2.setInt(4, receiveGoods.d_id);
+                        stmt2.setInt(5, currentRec);
+                        stmt2.executeUpdate();
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+
+                    stmt2 = db.stmtReveiveUpdateComment;
+                    try {
+                        if (receiveGoods.ol_returnflag.equals("N"))
+                            stmt2.setNull(1, Types.VARCHAR);
+                        else
+                            stmt2.setString(1, rnd.getAString(19, 78));
+                        stmt2.setInt(2, receiveGoods.w_id);
+                        stmt2.setInt(3, receiveGoods.d_id);
+                        stmt2.setInt(4, currentRec);
+                        stmt2.executeUpdate();
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                rs.close();
+                db.commit();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        }
+        receiveGoods.execution_status = "receiveGoods has been down";
+    }
+
 
     public void traceScreen(Logger log)
             throws Exception {
@@ -192,7 +293,7 @@ public class jTPCCTData {
         synchronized (traceLock) {
             fmt.format("==== %s %s ==== Terminal %d,%d =================================================",
                     transTypeNames[transType],
-                    (transEnd == 0) ? "INPUT" : "OUTPUT",
+                    (transEnd == 0) ? "INPUT" : "OTimestampUTPUT",
                     terminalWarehouse, terminalDistrict);
             sb.setLength(79);
             log.trace(sb.toString());
@@ -228,6 +329,7 @@ public class jTPCCTData {
                 case TT_STOCK_LEVEL -> traceStockLevel(log, screenFmt);
                 case TT_DELIVERY -> traceDelivery(log, screenFmt);
                 case TT_DELIVERY_BG -> traceDeliveryBG(log, screenFmt);
+                case TT_RECEIVE -> traceReceiveGoods(log, screenFmt);
                 default -> throw new Exception("Unknown transType " + transType);
             }
 
@@ -280,6 +382,7 @@ public class jTPCCTData {
         stockLevel = null;
         delivery = null;
         deliveryBG = null;
+        receiveGoods = null;
 
         newOrder.w_id = terminalWarehouse;    // 2.4.1.1
         newOrder.d_id = rnd.nextInt(1, 10);   // 2.4.1.2
@@ -312,7 +415,7 @@ public class jTPCCTData {
         }
     }
 
-    private void executeNewOrder(Logger log, jTPCCConnection db)
+    private void executeNewOrder(Logger log, jTPCCConnection db, jTPCCRandom rnd)
             throws Exception {
         PreparedStatement stmt;
         PreparedStatement insertOrderLineBatch;
@@ -427,6 +530,7 @@ public class jTPCCTData {
             stmt.setTimestamp(5, new java.sql.Timestamp((newOrder.o_entry_d).getTime()));
             stmt.setInt(6, ol_cnt);
             stmt.setInt(7, o_all_local);
+            stmt.setInt(8, 0);
             stmt.executeUpdate();
 
             // Insert the NEW_ORDER row
@@ -533,7 +637,7 @@ public class jTPCCTData {
                 insertOrderLineBatch.setInt(1, o_id);
                 insertOrderLineBatch.setInt(2, newOrder.d_id);
                 insertOrderLineBatch.setInt(3, newOrder.w_id);
-                insertOrderLineBatch.setInt(4, seq + 1);
+                insertOrderLineBatch.setInt(4, ol_number);
                 insertOrderLineBatch.setInt(5, newOrder.ol_i_id[seq]);
                 insertOrderLineBatch.setInt(6, newOrder.ol_supply_w_id[seq]);
                 insertOrderLineBatch.setInt(7, newOrder.ol_quantity[seq]);
@@ -550,6 +654,10 @@ public class jTPCCTData {
                     case 9 -> insertOrderLineBatch.setString(9, rs.getString("s_dist_09"));
                     case 10 -> insertOrderLineBatch.setString(9, rs.getString("s_dist_10"));
                 }
+                insertOrderLineBatch.setDouble(10, rnd.nextInt(0, 10) / 100.00);
+                Date ol_commitdate = new java.sql.Timestamp((newOrder.o_entry_d).getTime() + 86400000 * rnd.nextInt(30, 90));
+                insertOrderLineBatch.setTimestamp(11, new Timestamp(ol_commitdate.getTime()));
+                insertOrderLineBatch.setInt(12, (newOrder.ol_i_id[seq] + rnd.nextInt(0, 3) * (newOrder.w_id * 10000 / 4 + (newOrder.ol_i_id[seq] - 1) / (newOrder.w_id * 10000))) % (newOrder.w_id * 10000) + 1);
                 insertOrderLineBatch.addBatch();
             }
             rs.close();
@@ -864,6 +972,7 @@ public class jTPCCTData {
         stockLevel = null;
         delivery = null;
         deliveryBG = null;
+        receiveGoods = null;
 
         payment.w_id = terminalWarehouse;    // 2.5.1.1
         payment.d_id = rnd.nextInt(1, 10);   // 2.5.1.2
@@ -886,7 +995,7 @@ public class jTPCCTData {
         payment.h_amount = ((double) rnd.nextLong(100, 500000)) / 100.0;
     }
 
-    private void executePayment(Logger log, jTPCCConnection db)
+    private void executePayment(Logger log, jTPCCConnection db, jTPCCRandom rnd)
             throws Exception {
         PreparedStatement stmt;
         ResultSet rs;
@@ -984,7 +1093,7 @@ public class jTPCCTData {
             payment.c_street_1 = rs.getString("c_street_1");
             payment.c_street_2 = rs.getString("c_street_2");
             payment.c_city = rs.getString("c_city");
-            payment.c_state = rs.getString("c_state");
+            payment.c_state = rs.getInt("c_nationkey");
             payment.c_zip = rs.getString("c_zip");
             payment.c_phone = rs.getString("c_phone");
             payment.c_since = rs.getTimestamp("c_since").toString();
@@ -1120,7 +1229,7 @@ public class jTPCCTData {
             payment.c_street_1 = rs.getString("out_c_street_1");
             payment.c_street_2 = rs.getString("out_c_street_2");
             payment.c_city = rs.getString("out_c_city");
-            payment.c_state = rs.getString("out_c_state");
+            payment.c_state = rs.getInt("out_c_state");
             payment.c_zip = rs.getString("out_c_zip");
             payment.c_phone = rs.getString("out_c_phone");
             payment.c_since = rs.getTimestamp("out_c_since").toString();
@@ -1224,7 +1333,7 @@ public class jTPCCTData {
             payment.c_street_1 = stmt.getString(22);
             payment.c_street_2 = stmt.getString(23);
             payment.c_city = stmt.getString(24);
-            payment.c_state = stmt.getString(25);
+            payment.c_state = stmt.getInt(25);
             payment.c_zip = stmt.getString(26);
             payment.c_phone = stmt.getString(27);
             payment.c_since = stmt.getTimestamp(28).toString();
@@ -1303,6 +1412,7 @@ public class jTPCCTData {
                     payment.w_zip.substring(0, 5), payment.w_zip.substring(5, 9),
                     payment.d_city, payment.d_state,
                     payment.d_zip.substring(0, 5), payment.d_zip.substring(5, 9));
+            log.trace("w_zip=" + payment.w_zip + " d_zip=" + payment.d_zip);
 
             fmt[8].format("Customer: %4d  Cust-Warehouse: %6d  Cust-District: %2d",
                     payment.c_id, payment.c_w_id, payment.c_d_id);
@@ -1352,6 +1462,7 @@ public class jTPCCTData {
         stockLevel = null;
         delivery = null;
         deliveryBG = null;
+        receiveGoods = null;
 
         orderStatus.w_id = terminalWarehouse;
         orderStatus.d_id = rnd.nextInt(1, 10);
@@ -1707,6 +1818,7 @@ public class jTPCCTData {
         stockLevel = new StockLevelData();
         delivery = null;
         deliveryBG = null;
+        receiveGoods = null;
 
         stockLevel.w_id = terminalWarehouse;
         stockLevel.d_id = terminalDistrict;
@@ -1883,6 +1995,7 @@ public class jTPCCTData {
         stockLevel = null;
         delivery = new DeliveryData();
         deliveryBG = null;
+        receiveGoods = null;
 
         delivery.w_id = terminalWarehouse;
         delivery.o_carrier_id = rnd.nextInt(1, 10);
@@ -1890,7 +2003,7 @@ public class jTPCCTData {
         delivery.deliveryBG = null;
     }
 
-    private void executeDelivery(Logger log, jTPCCConnection db) throws ParseException {
+    private void executeDelivery(Logger log, jTPCCConnection db, jTPCCRandom rnd) throws ParseException {
         // origin date
         long now = System.currentTimeMillis();
         // current date
@@ -1965,6 +2078,7 @@ public class jTPCCTData {
         stockLevel = null;
         delivery = null;
         deliveryBG = new DeliveryBGData();
+        receiveGoods = null;
 
         deliveryBG.w_id = parent.delivery.w_id;
         deliveryBG.o_carrier_id = parent.delivery.o_carrier_id;
@@ -2009,7 +2123,7 @@ public class jTPCCTData {
                     }
                     o_id = rs.getInt("no_o_id");
                     rs.close();
-//                    devOrderIdPerW[deliveryBG.w_id * 10 + d_id].incrementAndGet();
+                    devOrderIdPerW[deliveryBG.w_id * 10 + d_id].incrementAndGet();
                     stmt2.setInt(1, deliveryBG.w_id);
                     stmt2.setInt(2, d_id);
                     stmt2.setInt(3, o_id);
@@ -2069,12 +2183,14 @@ public class jTPCCTData {
                 // Update ORDER_LINE setting the ol_delivery_d.
                 stmt1 = db.stmtDeliveryBGUpdateOrderLine;
                 // orgin date
-                stmt1.setTimestamp(1, new java.sql.Timestamp(now));
+//              stmt1.setTimestamp(1, new java.sql.Timestamp(now));
                 // current date
-                stmt1.setTimestamp(1, new java.sql.Timestamp(o_entry_d.getTime() + 86400000L * rnd.nextInt(1, 121)));
-                stmt1.setInt(2, deliveryBG.w_id);
-                stmt1.setInt(3, d_id);
-                stmt1.setInt(4, o_id);
+                stmt1.setTimestamp(1, new Timestamp(o_entry_d.getTime() + 86400000L * rnd.nextInt(1, 121)));
+                stmt1.setString(2, rnd.getSmode(0, 6));     //Update ORDER_LINE Set Smode
+                stmt1.setString(3, rnd.getSinstruct(0, 3)); // Update ORDER_LINE Set sInstruct
+                stmt1.setInt(4, deliveryBG.w_id);
+                stmt1.setInt(5, d_id);
+                stmt1.setInt(6, o_id);
                 stmt1.executeUpdate();
 
                 // Select the sum(ol_amount) from ORDER_LINE.
@@ -2254,6 +2370,17 @@ public class jTPCCTData {
         return numSkipped;
     }
 
+    private void traceReceiveGoods(Logger log, Formatter[] fmt) {
+        fmt[0].format("                                     ReceiveGoods");
+        fmt[1].format("Warehouse: %6d", receiveGoods.w_id);
+        if (transEnd == 0) {
+            fmt[3].format("Execution Status: ");
+        } else {
+            fmt[3].format("Execution Status: %s", receiveGoods.execution_status);
+        }
+    }
+
+
     private static class NewOrderData {
         /* terminal input data */
         public int w_id;
@@ -2339,6 +2466,17 @@ public class jTPCCTData {
         public int[] delivered_o_id;
     }
 
+    public static class ReceiveGoodsData {
+        /* RECEIVEGOODS data */
+        public int w_id;
+        public int d_id;
+        public int o_id;
+        public long ol_receipdate;
+        public Timestamp ol_delivery_d;
+        public String ol_returnflag;
+        public String execution_status;
+    }
+
     private static class PaymentData {
         /* terminal input data */
         public int w_id;
@@ -2367,7 +2505,7 @@ public class jTPCCTData {
         public String c_street_1;
         public String c_street_2;
         public String c_city;
-        public String c_state;
+        public Integer c_state;
         public String c_zip;
         public String c_phone;
         public String c_since;

@@ -16,15 +16,19 @@ import java.text.*;
 import java.util.Date;
 
 public class jTPCCRandom {
-    private static final char[] aStringChars = {
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-            'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
-    private static final String[] cLastTokens = {
-            "BAR", "OUGHT", "ABLE", "PRI", "PRES",
-            "ESE", "ANTI", "CALLY", "ATION", "EING"};
+    private static final char[] aStringChars = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+    private static final String[] cLastTokens = {"BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE", "ANTI", "CALLY", "ATION", "EING"};
+    private static final String[] pNameColor = {"almond", "antique", "aquamarine", "azure", "beige", "bisque", "black", "blanched", "blue", "blush", "brown", "burlywood", "burnished", "chartreuse", "chiffon", "chocolate", "coral", "cornflower", "cornsilk", "cream", "cyan", "dark", "deep", "dim", "dodger", "drab", "firebrick", "floral", "forest", "frosted", "gainsboro", "ghost", "goldenrod", "green", "grey", "honeydew", "hot", "indian", "ivory", "khaki", "lace", "lavender", "lawn", "lemon", "light", "lime", "linen", "magenta", "maroon", "medium", "metallic", "midnight", "mint", "misty", "moccasin", "navajo", "navy", "olive", "orange", "orchid", "pale", "papaya", "peach", "peru", "pink", "plum", "powder", "puff", "purple", "red", "rose", "rosy", "royal", "saddle", "salmon", "sandy", "seashell", "sienna", "sky", "slate", "smoke", "snow", "spring", "steel", "tan", "thistle", "tomato", "turquoise", "violet", "wheat", "white", "yellow"};
+    private static final String[] containerSyllable1 = {"SM", "LG", "MED", "JUMBO", "WRAP"};
+    private static final String[] containerSyllable2 = {"CASE", "BOX", "BAG", "JAR", "PKG", "PACK", "CAN", "DRUM"};
+
+    private static final String[] typeSyllable1 = {"STANDARD", "SMALL", "MEDIUM", "LARGE", "ECONOMY", "PROMO"};
+    private static final String[] typeSyllable2 = {"ANODIZED", "BURNISHED", "PLATED", "POLISHED", "BRUSHED"};
+    private static final String[] typeSyllable3 = {"TIN", "NICKEL", "BRASS", "STEEL", "COPPER"};
+    private static final String[] cktSegment = {"AUTOMOBILE", "BUILDING", "FURNITURE", "HOUSEHOLD", "MACHINERY"};
+    private static final String[] sMode = {"REG AIR", "AIR", "RAIL", "TRUCK", "MAIL", "FOB", "SHIP"};
+    private static final String[] rFlag = {"R", "A", "N"};
+    private static final String[] sInstruct = {"DELIVER IN PERSON", "COLLECT COD", "TAKE BACK RETURN", "NONE"};
 
     private static long nURandCLast;
     private static long nURandCC_ID;
@@ -397,13 +401,42 @@ public class jTPCCRandom {
         return now.getTime();
     }
 
-    public Date getRandomDateBetween(Date d1, Date d2) {
-        int diffDays = differentDaysByMillisecond(d1, d2);
-        return getDateAfter(d1, diffDays);
+    public String getPName(int low, int high) {
+        String result;
+        int num = nextInt(low, high);
+        result = pNameColor[num];
+        return result;
     }
 
-    public long getRandomTimestampBetween(Date d1, Date d2) {
-        long range = d2.getTime() - d1.getTime();
-        return d1.getTime() + (long) (random.nextDouble() * range);
+    public String getContainer() {
+        String result = "";
+        result += containerSyllable1[nextInt(0, 4)];
+        result += " ";
+        result += containerSyllable2[nextInt(0, 7)];
+        return result;
+    }
+
+    public String getSmode(int low, int high) {
+        return sMode[nextInt(low, high)];
+    }
+
+    public String getSinstruct(int low, int high) {
+        return sInstruct[nextInt(low, high)];
+    }
+
+    public String getType() {
+        String result = "";
+        result += typeSyllable1[nextInt(0, 5)];
+        result += " ";
+        result += typeSyllable2[nextInt(0, 4)];
+        result += " ";
+        result += typeSyllable3[nextInt(0, 4)];
+        return result;
+    }
+
+    public String getCktSegement(int low, int high) {
+        String result = "";
+        result += cktSegment[nextInt(low, high)];
+        return result;
     }
 } // end jTPCCRandom

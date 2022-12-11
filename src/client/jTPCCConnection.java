@@ -54,6 +54,10 @@ public class jTPCCConnection {
     public PreparedStatement stmtDeliveryBGUpdateCustomer;
     public PreparedStatement stmtDeliveryBGStoredProc;
     public String stmtDeliveryBGStoredProcOracle;
+    public PreparedStatement stmtReveiveSelectOldeliveryd;
+    public PreparedStatement stmtReveiveUpdateReceipdate;
+    public PreparedStatement stmtReveiveUpdateComment;
+    public PreparedStatement stmtAbort;
     private Connection dbConn;
     private int dbType;
 
@@ -80,8 +84,8 @@ public class jTPCCConnection {
         stmtNewOrderInsertOrder = dbConn.prepareStatement(
                 "INSERT INTO bmsql_oorder (" +
                         "    o_id, o_d_id, o_w_id, o_c_id, o_entry_d, " +
-                        "    o_ol_cnt, o_all_local) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)");
+                        "    o_ol_cnt, o_all_local, o_shippriority) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         stmtNewOrderInsertNewOrder = dbConn.prepareStatement(
                 "INSERT INTO bmsql_new_order (" +
                         "    no_o_id, no_d_id, no_w_id) " +
@@ -108,8 +112,22 @@ public class jTPCCConnection {
                 "INSERT INTO bmsql_order_line (" +
                         "    ol_o_id, ol_d_id, ol_w_id, ol_number, " +
                         "    ol_i_id, ol_supply_w_id, ol_quantity, " +
-                        "    ol_amount, ol_dist_info) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        "    ol_amount, ol_dist_info, ol_discount, ol_commitdate,ol_suppkey) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+        //PreparedStatements for ReceiveGoods
+        stmtReveiveSelectOldeliveryd = dbConn.prepareStatement(
+                "SELECT ol_delivery_d " +
+                        "FROM bmsql_order_line " +
+                        "WHERE ol_w_id= ? AND ol_d_id=? AND ol_o_id=? ");
+        stmtReveiveUpdateReceipdate = dbConn.prepareStatement(
+                "UPDATE bmsql_order_line " +
+                        "SET ol_receipdate = ?, ol_returnflag = ? " +
+                        "WHERE ol_w_id= ? AND ol_d_id=? AND ol_o_id=? ");
+        stmtReveiveUpdateComment = dbConn.prepareStatement(
+                "UPDATE bmsql_oorder " +
+                        "SET o_comment = ? " +
+                        "WHERE o_w_id = ? AND o_d_id = ? AND o_id = ?");
 
         switch (dbType) {
             case jTPCCConfig.DB_POSTGRES -> stmtNewOrderStoredProc = dbConn.prepareStatement(
@@ -119,6 +137,7 @@ public class jTPCCConnection {
                             ",?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         }
 
+        // PreparedStatements for PAYMENT
         // PreparedStatements for PAYMENT
         stmtPaymentSelectWarehouse = dbConn.prepareStatement(
                 "SELECT w_name, w_street_1, w_street_2, w_city, " +
@@ -137,7 +156,7 @@ public class jTPCCConnection {
                         "    ORDER BY c_first");
         stmtPaymentSelectCustomer = dbConn.prepareStatement(
                 "SELECT c_first, c_middle, c_last, c_street_1, c_street_2, " +
-                        "       c_city, c_state, c_zip, c_phone, c_since, c_credit, " +
+                        "       c_city, c_nationkey, c_zip, c_phone, c_since, c_credit, " +
                         "       c_credit_lim, c_discount, c_balance " +
                         "    FROM bmsql_customer " +
                         "    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ? " +
@@ -209,16 +228,11 @@ public class jTPCCConnection {
                         "    ORDER BY ol_w_id, ol_d_id, ol_o_id, ol_number");
 
         switch (dbType) {
-            case jTPCCConfig.DB_POSTGRES:
-                stmtOrderStatusStoredProc = dbConn.prepareStatement(
-                        "SELECT * FROM bmsql_proc_order_status (?, ?, ?, ?)");
-                break;
-
-            case jTPCCConfig.DB_ORACLE:
-                stmtOrderStatusStoredProcOracle =
-                        "{call tpccc_oracle.oracle_proc_order_status(?, ?, ?, " +
-                                "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
-                break;
+            case jTPCCConfig.DB_POSTGRES -> stmtOrderStatusStoredProc = dbConn.prepareStatement(
+                    "SELECT * FROM bmsql_proc_order_status (?, ?, ?, ?)");
+            case jTPCCConfig.DB_ORACLE -> stmtOrderStatusStoredProcOracle =
+                    "{call tpccc_oracle.oracle_proc_order_status(?, ?, ?, " +
+                            "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
         }
 
         // PreparedStatements for STOCK_LEVEL
@@ -271,7 +285,7 @@ public class jTPCCConnection {
                 "DELETE FROM bmsql_new_order " +
                         "    WHERE no_w_id = ? AND no_d_id = ? AND no_o_id = ?");
         stmtDeliveryBGSelectOrder = dbConn.prepareStatement(
-                "SELECT o_c_id, o_entry_d " +
+                "SELECT o_c_id,o_entry_d " +
                         "    FROM bmsql_oorder " +
                         "    WHERE o_w_id = ? AND o_d_id = ? AND o_id = ?");
         stmtDeliveryBGUpdateOrder = dbConn.prepareStatement(
@@ -284,7 +298,7 @@ public class jTPCCConnection {
                         "    WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id = ?");
         stmtDeliveryBGUpdateOrderLine = dbConn.prepareStatement(
                 "UPDATE bmsql_order_line " +
-                        "    SET ol_delivery_d = ? " +
+                        "    SET ol_delivery_d = ? , ol_shipmode = ? , ol_shipinstruct = ? " +
                         "    WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id = ?");
         stmtDeliveryBGUpdateCustomer = dbConn.prepareStatement(
                 "UPDATE bmsql_customer " +

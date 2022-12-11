@@ -35,6 +35,9 @@ public class LoadDataWorker implements Runnable {
     private PreparedStatement stmtOrder = null;
     private PreparedStatement stmtOrderLine = null;
     private PreparedStatement stmtNewOrder = null;
+    private PreparedStatement stmtRegion = null;
+    private PreparedStatement stmtNation = null;
+    private PreparedStatement stmtSupplier = null;
 
     private StringBuffer sbConfig = null;
     private Formatter fmtConfig = null;
@@ -104,8 +107,8 @@ public class LoadDataWorker implements Runnable {
         );
         stmtItem = dbConn.prepareStatement(
                 "INSERT INTO bmsql_item (" +
-                        "  i_id, i_im_id, i_name, i_price, i_data) " +
-                        "VALUES (?, ?, ?, ?, ?)"
+                        "  i_id, i_im_id, i_name, i_price, i_data, i_container, i_size, i_brand, i_type, i_mfgr) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         stmtWarehouse = dbConn.prepareStatement(
                 "INSERT INTO bmsql_warehouse (" +
@@ -118,8 +121,8 @@ public class LoadDataWorker implements Runnable {
                         "  s_i_id, s_w_id, s_quantity, s_dist_01, s_dist_02, " +
                         "  s_dist_03, s_dist_04, s_dist_05, s_dist_06, " +
                         "  s_dist_07, s_dist_08, s_dist_09, s_dist_10, " +
-                        "  s_ytd, s_order_cnt, s_remote_cnt, s_data) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                        "  s_ytd, s_order_cnt, s_remote_cnt, s_data, s_supplycost,s_tocksuppkey) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         stmtDistrict = dbConn.prepareStatement(
                 "INSERT INTO bmsql_district (" +
@@ -130,12 +133,12 @@ public class LoadDataWorker implements Runnable {
         stmtCustomer = dbConn.prepareStatement(
                 "INSERT INTO bmsql_customer (" +
                         "  c_id, c_d_id, c_w_id, c_first, c_middle, c_last, " +
-                        "  c_street_1, c_street_2, c_city, c_state, c_zip, " +
+                        "  c_street_1, c_street_2, c_city, c_nationkey, c_zip, " +
                         "  c_phone, c_since, c_credit, c_credit_lim, c_discount, " +
                         "  c_balance, c_ytd_payment, c_payment_cnt, " +
-                        "  c_delivery_cnt, c_data) " +
+                        "  c_delivery_cnt, c_data, c_mktsegment) " +
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
-                        "        ?, ?, ?, ?, ?, ?)"
+                        "        ?, ?, ?, ?, ?, ?, ?)"
         );
         stmtHistory = dbConn.prepareStatement(
                 "INSERT INTO bmsql_history (" +
@@ -146,20 +149,30 @@ public class LoadDataWorker implements Runnable {
         stmtOrder = dbConn.prepareStatement(
                 "INSERT INTO bmsql_oorder (" +
                         "  o_id, o_d_id, o_w_id, o_c_id, o_entry_d, " +
-                        "  o_carrier_id, o_ol_cnt, o_all_local) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                        "  o_carrier_id, o_ol_cnt, o_all_local, o_comment, o_shippriority) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         stmtOrderLine = dbConn.prepareStatement(
                 "INSERT INTO bmsql_order_line (" +
                         "  ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, " +
                         "  ol_supply_w_id, ol_delivery_d, ol_quantity, " +
-                        "  ol_amount, ol_dist_info) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                        "  ol_amount, ol_dist_info, ol_discount, ol_shipmode," +
+                        "  ol_shipinstruct, ol_receipdate, ol_commitdate, ol_returnflag, ol_suppkey, ol_tax) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         stmtNewOrder = dbConn.prepareStatement(
                 "INSERT INTO bmsql_new_order (" +
                         "  no_o_id, no_d_id, no_w_id) " +
                         "VALUES (?, ?, ?)"
+        );
+        stmtRegion = dbConn.prepareStatement(
+                "insert into bmsql_region (R_REGIONKEY,R_NAME,R_COMMENT) values (?,?,?)"
+        );
+        stmtNation = dbConn.prepareStatement(
+                "insert into bmsql_nation (N_NATIONKEY,N_NAME,N_REGIONKEY,N_COMMENT) values (?,?,?,?)"
+        );
+        stmtSupplier = dbConn.prepareStatement(
+                "insert into bmsql_supplier (S_SUPPKEY,S_NATIONKEY,S_COMMENT) values (?, ?, ?)"
         );
     }
 
@@ -172,13 +185,45 @@ public class LoadDataWorker implements Runnable {
         try {
             while ((job = LoadData.getNextJob()) >= 0) {
                 if (job == 0) {
-                    fmt.format("Worker %03d: Loading ITEM", worker);
+                    fmt.format("Worker %03d: Loading Item", worker);
                     System.out.println(sb.toString());
                     sb.setLength(0);
 
                     loadItem();
 
-                    fmt.format("Worker %03d: Loading ITEM done", worker);
+                    fmt.format("Worker %03d: Loading Item done", worker);
+                    System.out.println(sb.toString());
+                    sb.setLength(0);
+
+                    fmt.format("Worker %03d: Loading Nation", worker);
+                    System.out.println(sb.toString());
+                    sb.setLength(0);
+
+                    loadNation();
+
+                    fmt.format("Worker %03d: Loading Nation done", worker);
+                    System.out.println(sb.toString());
+                    sb.setLength(0);
+
+                    fmt.format("Worker %03d: Loading Region", worker);
+                    System.out.println(sb.toString());
+                    sb.setLength(0);
+
+                    loadRegion();
+
+                    fmt.format("Worker %03d: Loading Region done", worker);
+                    System.out.println(sb.toString());
+                    sb.setLength(0);
+
+                    fmt.format("Worker %03d: Loading Supplier", worker);
+                    System.out.println(sb.toString());
+                    sb.setLength(0);
+
+                    loadSupplier();
+
+                    fmt.format("Worker %03d: Loading Supplier done", worker);
+                    System.out.println(sb.toString());
+                    sb.setLength(0);
                 } else {
                     fmt.format("Worker %03d: Loading Warehouse %6d",
                             worker, job);
@@ -214,6 +259,86 @@ public class LoadDataWorker implements Runnable {
             e.printStackTrace();
         }
     } // End run()
+
+    private void loadRegion() {
+        try {
+            //System.out.println("region-Working Directory = " + System.getProperty("user.dir"));
+            String path = "src/LoadData/region.txt";
+            File file = new File("..", path);
+            BufferedReader br = new BufferedReader(new FileReader(file));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] lineToken = line.split(",");
+                if (lineToken.length == 2) {
+                    stmtRegion.setInt(1, Integer.parseInt(lineToken[0]));
+                    stmtRegion.setString(2, lineToken[1]);
+                    stmtRegion.setNull(3, Types.VARCHAR);
+                }
+                stmtRegion.addBatch();
+            }
+            stmtRegion.executeBatch();
+            stmtRegion.clearBatch();
+            dbConn.commit();
+        } catch (SQLException | IOException e) {
+            System.out.println(e);
+        }
+    }
+
+    private void loadNation() {
+        try {
+            String path = "src/LoadData/nation.txt";
+            File file = new File("..", path);
+            BufferedReader br = new BufferedReader(new FileReader(file));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] lineToken = line.split(",");
+                if (lineToken.length == 3) {
+                    stmtNation.setInt(1, Integer.parseInt(lineToken[0]));
+                    stmtNation.setString(2, lineToken[1]);
+                    stmtNation.setInt(3, Integer.parseInt(lineToken[2]));
+                    stmtNation.setNull(4, Types.VARCHAR);
+                }
+                stmtNation.addBatch();
+            }
+            stmtNation.executeBatch();
+            stmtNation.clearBatch();
+            dbConn.commit();
+        } catch (SQLException | IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void loadSupplier() {
+        int SF = LoadData.getNumWarehouses();
+
+        try {
+            for (int i = 1; i <= SF * 10000; i++) {
+                String s_comment = "";              //text[25,100]
+                stmtSupplier.setInt(1, i);
+                if (rnd.nextInt(1, 100) < 50) {
+                    s_comment += rnd.getAString(7, 41);
+                    s_comment += "Customer";//8
+                    s_comment += rnd.getAString(0, 41);
+                    s_comment += "Complaints";//10
+                } else {
+                    s_comment += rnd.getAString(7, 41);
+                    s_comment += "Customer";//8
+                    s_comment += rnd.getAString(0, 41);
+                    s_comment += "Recommends";//10
+                }
+                stmtSupplier.setInt(2, rnd.nextInt(0, 24));
+                stmtSupplier.setString(3, s_comment);
+                stmtSupplier.addBatch();
+            }
+            stmtSupplier.executeBatch();
+            stmtSupplier.clearBatch();
+            dbConn.commit();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     /* ----
      * loadItem()
@@ -289,11 +414,18 @@ public class LoadDataWorker implements Runnable {
                         rnd.nextInt(1, 10000));
 
             } else {
+                int mfgr = rnd.nextInt(1, 5);
                 stmtItem.setInt(1, i_id);
                 stmtItem.setInt(2, rnd.nextInt(1, 10000));
-                stmtItem.setString(3, rnd.getAString_14_24());
+//                stmtItem.setString(3, rnd.getAString_14_24());
+                stmtItem.setString(3, rnd.getPName(0, 91));
                 stmtItem.setDouble(4, ((double) rnd.nextLong(100, 10000)) / 100.0);
                 stmtItem.setString(5, iData);
+                stmtItem.setString(6, rnd.getContainer());                          //i_container
+                stmtItem.setInt(7, rnd.nextInt(1, 50));                          //i_size
+                stmtItem.setString(8, "Brand#" + rnd.nextInt(1, 5) + mfgr);    //i_brand
+                stmtItem.setString(9, rnd.getType());                               //i_type
+                stmtItem.setString(10, String.valueOf(mfgr));                       //i_mfgr
 
                 stmtItem.addBatch();
             }
@@ -334,7 +466,8 @@ public class LoadDataWorker implements Runnable {
                     rnd.getAString_10_20(),
                     rnd.getAString_10_20(),
                     rnd.getAString_10_20(),
-                    rnd.getState(),
+//                    rnd.getState(),
+                    rnd.nextInt(0, 24),
                     rnd.getNString(4, 4) + "11111");
 
             LoadData.warehouseAppend(sbWarehouse);
@@ -344,7 +477,8 @@ public class LoadDataWorker implements Runnable {
             stmtWarehouse.setString(3, rnd.getAString_10_20());
             stmtWarehouse.setString(4, rnd.getAString_10_20());
             stmtWarehouse.setString(5, rnd.getAString_10_20());
-            stmtWarehouse.setString(6, rnd.getState());
+//            stmtWarehouse.setString(6, rnd.getState());
+            stmtWarehouse.setInt(6, rnd.nextInt(0, 24));
             stmtWarehouse.setString(7, rnd.getNString(4, 4) + "11111");
             stmtWarehouse.setDouble(8, ((double) rnd.nextLong(0, 2000)) / 10000.0);
             stmtWarehouse.setDouble(9, 300000.0);
@@ -419,6 +553,8 @@ public class LoadDataWorker implements Runnable {
                 stmtStock.setInt(15, 0);
                 stmtStock.setInt(16, 0);
                 stmtStock.setString(17, sData);
+                stmtStock.setDouble(18, rnd.nextLong((long) 1.00, (long) 1000.00));
+                stmtStock.setInt(19, (s_i_id + rnd.nextInt(0, 3) * ((w_id * 10000) / 4 + (s_i_id - 1) / (w_id * 10000))) % (w_id * 10000) + 1);
 
                 stmtStock.addBatch();
             }
@@ -457,7 +593,8 @@ public class LoadDataWorker implements Runnable {
                 stmtDistrict.setString(4, rnd.getAString_10_20());
                 stmtDistrict.setString(5, rnd.getAString_10_20());
                 stmtDistrict.setString(6, rnd.getAString_10_20());
-                stmtDistrict.setString(7, rnd.getState());
+//                stmtDistrict.setString(7, rnd.getState());
+                stmtDistrict.setInt(7, rnd.nextInt(0, 24));
                 stmtDistrict.setString(8, rnd.getNString(4, 4) + "11111");
                 stmtDistrict.setDouble(9, ((double) rnd.nextLong(0, 2000)) / 10000.0);
                 stmtDistrict.setDouble(10, 30000.0);
@@ -489,7 +626,8 @@ public class LoadDataWorker implements Runnable {
                             rnd.getAString_10_20(),
                             rnd.getAString_10_20(),
                             rnd.getAString_10_20(),
-                            rnd.getState(),
+//                            rnd.getState(),
+                            rnd.nextInt(0, 24),
                             rnd.getNString(4, 4) + "11111",
                             rnd.getNString(16, 16),
                             new Timestamp(System.currentTimeMillis()),
@@ -508,7 +646,8 @@ public class LoadDataWorker implements Runnable {
                     stmtCustomer.setString(7, rnd.getAString_10_20());
                     stmtCustomer.setString(8, rnd.getAString_10_20());
                     stmtCustomer.setString(9, rnd.getAString_10_20());
-                    stmtCustomer.setString(10, rnd.getState());
+//                    stmtCustomer.setString(10, rnd.getState());
+                    stmtCustomer.setInt(10, rnd.nextInt(0, 24));
                     stmtCustomer.setString(11, rnd.getNString(4, 4) + "11111");
                     stmtCustomer.setString(12, rnd.getNString(16, 16));
                     // origin date
@@ -521,12 +660,12 @@ public class LoadDataWorker implements Runnable {
                         stmtCustomer.setString(14, "BC");
                     stmtCustomer.setDouble(15, 50000.00);
                     stmtCustomer.setDouble(16, ((double) rnd.nextLong(0, 5000)) / 10000.0);
-                    stmtCustomer.setDouble(17, -10.00);
+                    stmtCustomer.setDouble(17, rnd.nextLong(-99999, 999999) / 100.00);
                     stmtCustomer.setDouble(18, 10.00);
                     stmtCustomer.setInt(19, 1);
                     stmtCustomer.setInt(20, 1);
                     stmtCustomer.setString(21, rnd.getAString_300_500());
-
+                    stmtCustomer.setString(22, rnd.getCktSegement(0, 4));
                     stmtCustomer.addBatch();
                 }
 
@@ -610,14 +749,17 @@ public class LoadDataWorker implements Runnable {
                     // origin date
 //                    stmtOrder.setTimestamp(5, new java.sql.Timestamp(System.currentTimeMillis()));
                     // current date
+                    //  5-o_entry_d----o_orderdate
                     stmtOrder.setTimestamp(5, new java.sql.Timestamp(o_entry_d));
                     if (o_id < 2101)
-                        stmtOrder.setInt(6, rnd.nextInt(1, 10));
+//                        stmtOrder.setInt(6, rnd.nextInt(1, 10));
+                        stmtOrder.setInt(6, rnd.nextInt(1, 5));
                     else
-                        stmtOrder.setNull(6, java.sql.Types.INTEGER);
+                        stmtOrder.setNull(6, Types.INTEGER);
                     stmtOrder.setInt(7, o_ol_cnt);
                     stmtOrder.setInt(8, 1);
-
+                    stmtOrder.setNull(9, Types.VARCHAR);    //o_comment[19,78]
+                    stmtOrder.setInt(10, 0);
                     stmtOrder.addBatch();
                 }
 
@@ -634,7 +776,7 @@ public class LoadDataWorker implements Runnable {
                                 o_id,
                                 ol_number,
                                 rnd.nextInt(1, 100000),
-                                (o_id < 2101) ? new java.sql.Timestamp(now).toString() : csvNull,
+                                (o_id < 2101) ? new Timestamp(now).toString() : csvNull,
                                 (o_id < 2101) ? 0.00 : ((double) rnd.nextLong(1, 999999)) / 100.0,
                                 w_id,
                                 5,
@@ -646,23 +788,47 @@ public class LoadDataWorker implements Runnable {
                         stmtOrderLine.setInt(4, ol_number);
                         stmtOrderLine.setInt(5, rnd.nextInt(1, 100000));
                         stmtOrderLine.setInt(6, w_id);
+                        int ol_i_id = rnd.nextInt(1, 100000);
                         long shipDate = (long) (o_entry_d + 1000 * 60 * 60 * 24 * rnd.nextDouble(1, 121));
                         long commitDate = (long) (o_entry_d + 1000 * 60 * 60 * 24 * rnd.nextDouble(30, 90));
                         long receiptDate = (long) (shipDate + 1000 * 60 * 60 * 24 * rnd.nextDouble(1, 30));
-                        if (o_id < 2101)
+                        if (o_id < 2101) {
                             // origin date
 //                            stmtOrderLine.setTimestamp(7, new java.sql.Timestamp(now));
                             // current date
                             stmtOrderLine.setTimestamp(7, Timestamp.valueOf(simFormat.format(shipDate)));
-                        else
+                            stmtOrderLine.setTimestamp(14, Timestamp.valueOf(simFormat.format(receiptDate)));           //l_receipdate实际到达时间
+                            stmtOrderLine.setTimestamp(15, Timestamp.valueOf(simFormat.format(commitDate)));            //l_commitdate预计到达时间
+                            if (receiptDate > currentDate.getTime())
+                                stmtOrderLine.setString(16, "N");
+                            else {
+                                if (rnd.nextInt(0, 10) > 5)
+                                    stmtOrderLine.setString(16, "R");
+                                else
+                                    stmtOrderLine.setString(16, "A");
+                            }
+                            stmtOrderLine.setString(12, rnd.getSmode(0, 6));                                    //l_shipmode
+                            stmtOrderLine.setString(13, rnd.getSinstruct(0, 3));                                //l_shipinstruct
+                        } else {
                             stmtOrderLine.setNull(7, java.sql.Types.TIMESTAMP);
-                        stmtOrderLine.setInt(8, 5);
+                            stmtOrderLine.setNull(12, Types.VARCHAR);           //l_shipmode
+                            stmtOrderLine.setNull(13, Types.VARCHAR);           //l_shipinstruct
+                            stmtOrderLine.setNull(14, Types.TIMESTAMP);         //l_receipdate实际到达时间
+                            stmtOrderLine.setNull(15, Types.TIMESTAMP);         //l_commitdate预计到达时间
+                            stmtOrderLine.setNull(16, Types.CHAR);              //l_returnflag
+                        }
+                        //  8-ol_quantity----l_quantity
+                        //  stmtOrderLine.setInt(8, 5);
+                        stmtOrderLine.setInt(8, rnd.nextInt(1, 50));
+                        //  9-ol_amount
                         if (o_id < 2101)
                             stmtOrderLine.setDouble(9, 0.00);
                         else
                             stmtOrderLine.setDouble(9, ((double) rnd.nextLong(1, 999999)) / 100.0);
                         stmtOrderLine.setString(10, rnd.getAString_24());
-
+                        stmtOrderLine.setDouble(11, rnd.nextLong(0, 10) / 100.00);                               //l_discount
+                        stmtOrderLine.setInt(17, (ol_i_id + rnd.nextInt(0, 3) * (w_id * 10000 / 4 + (ol_i_id - 1) / (w_id * 10000))) % (w_id * 10000) + 1);//l_suppkey按tpch计算方式得到
+                        stmtOrderLine.setDouble(18, rnd.nextDouble(0, 0.08));                                      // l_tax's range: [0, 0.08]
                         stmtOrderLine.addBatch();
                     }
                 }
